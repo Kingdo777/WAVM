@@ -152,9 +152,9 @@ namespace WAVM { namespace IR {
 		// 构造函数，下面的构造函数都是通过getUniqueImpl实现的
 		// 最好用的应该就是通过vector进行转化
 		TypeTuple() : impl(getUniqueImpl(0, nullptr)) {}
-		WAVM_API explicit TypeTuple(ValueType inElem);
+		WAVM_API TypeTuple(ValueType inElem);
 		WAVM_API TypeTuple(const std::initializer_list<ValueType>& inElems);
-		WAVM_API explicit TypeTuple(const std::vector<ValueType>& inElems);
+		WAVM_API TypeTuple(const std::vector<ValueType>& inElems);
 		WAVM_API TypeTuple(const ValueType* inElems, Uptr numElems);
 
 		// 下面定义了对于元组的基本操作

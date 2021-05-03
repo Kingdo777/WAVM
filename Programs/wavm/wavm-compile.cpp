@@ -263,9 +263,17 @@ int execCompileCommand(int argc, char** argv)
 	// Load the module IR.
 	// 从WASM、WAT文件种加载IR::Module，此时Module就是完整从文件状态到了内存状态
 	// 还需进行链接和实例化，才能成为可以执行实例
+	// 也就是说需要把所有的Module给链接起来，组成一个可执行的实例
 	IR::Module irModule(featureSpec);
 	if(!loadTextOrBinaryModule(inputFilename, irModule)) { return EXIT_FAILURE; }
-
+    //有一下几种输出的模式：
+	//	precompiledModule,  即先编译为object，也就是目标文件，然后将其作为自定义段的内容生成一个新的wasm文件
+	//	unoptimizedLLVMIR,  编译成LLVM中的IR，也就是中间结果，IR经后端可以链接为制定平台的可执行代码
+	//	optimizedLLVMIR,    LLVM的IR可以由IR优化
+	//	object,             目标平台的的目标文件
+	//	assembly,           目标平台的汇编文件，汇编代码是先生成obj文件，然后反汇编输出的
+	// 但是上述的文件是无法直接链接的，缺乏链接库，不知道该怎么引入
+	// 感觉在套娃 .c 经过wasi-sdk中的llvm被编译为 .wasm ，然后又借助llvm将其编译为 .o
 	switch(outputFormat)
 	{
 	case OutputFormat::precompiledModule: {
