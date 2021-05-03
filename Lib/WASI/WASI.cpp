@@ -24,8 +24,14 @@ using namespace WAVM::Runtime;
 using namespace WAVM::WASI;
 
 namespace WAVM { namespace WASI {
-	WAVM_DEFINE_INTRINSIC_MODULE(wasi);
+//	WAVM_DEFINE_INTRINSIC_MODULE(wasi);
+        WAVM::Intrinsics::Module* getIntrinsicModule_wasi()
+        {
+            static WAVM::Intrinsics::Module module;
+            return &module;
+        }
 }}
+
 
 bool ProcessResolver::resolve(const std::string& moduleName,
 							  const std::string& exportName,
@@ -165,7 +171,15 @@ WAVM_DEFINE_INTRINSIC_FUNCTION(wasi,
 	UNIMPLEMENTED_SYSCALL("sock_shutdown", "(%u, 0x%02x)", sock, how);
 }
 
-WAVM_DEFINE_INTRINSIC_FUNCTION(wasi, "sched_yield", __wasi_errno_return_t, wasi_sched_yield)
+//WAVM_DEFINE_INTRINSIC_FUNCTION(wasi, "sched_yield", __wasi_errno_return_t, wasi_sched_yield)
+static __wasi_errno_return_t wasi_sched_yield(
+    WAVM::Runtime::ContextRuntimeData* contextRuntimeData);
+static WAVM::Intrinsics::Function wasi_sched_yieldIntrinsic(
+    getIntrinsicModule_wasi(),
+    "sched_yield",
+    (void*)&wasi_sched_yield,
+    WAVM::Intrinsics::inferIntrinsicFunctionType(&wasi_sched_yield));
+static __wasi_errno_return_t wasi_sched_yield(WAVM::Runtime::ContextRuntimeData* contextRuntimeData)
 {
 	TRACE_SYSCALL("sched_yield", "()");
 	Platform::yieldToAnotherThread();
@@ -204,7 +218,7 @@ std::shared_ptr<Process> WASI::createProcess(Runtime::Compartment* compartment,
 
 	Instance* wasi_snapshot_preview1
 		= Intrinsics::instantiateModule(compartment,
-										{WAVM_INTRINSIC_MODULE_REF(wasi),
+										{getIntrinsicModule_wasi(),
 										 WAVM_INTRINSIC_MODULE_REF(wasiArgsEnvs),
 										 WAVM_INTRINSIC_MODULE_REF(wasiClocks),
 										 WAVM_INTRINSIC_MODULE_REF(wasiFile)},

@@ -118,6 +118,10 @@ bool parseAndSetFeature(const char* featureName, IR::FeatureSpec& featureSpec, b
 {
 	if(!strcmp(featureName, "all-proposed"))
 	{
+		/**
+		 * #define 和 #undef并不是一对组合，define的返回就是到一行的末尾，或者是通过 \ 实现多行
+		 * 而#undef指的是取消使用这个定义，这俩放一起把我整糊涂了
+		 * */
 #define VISIT_FEATURE(cName, ...) featureSpec.cName = true;
 		WAVM_ENUM_STANDARD_FEATURES(VISIT_FEATURE)
 		WAVM_ENUM_MATURE_FEATURES(VISIT_FEATURE)
@@ -237,6 +241,7 @@ int execVersionCommand(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    // 通过环境变量"WAVM_OUTPUT"决定日志的输出级别
 	if(!initLogFromEnvironment()) { return EXIT_FAILURE; }
 
 	if(argc < 2)

@@ -73,6 +73,35 @@ namespace WAVM { namespace IR {
 	struct FeatureSpec
 	{
 		// Declare a bool member for each feature.
+		// 以下代码等价于
+		/**
+		 * bool mvp;
+		 * ##### mvp level #####
+		 * bool importExportMutableGlobals;
+		 * bool nonTrappingFloatToInt;
+		 * bool signExtension;
+		 * bool multipleResultsAndBlockParams;
+		 * bool bulkMemoryOperations;
+		 * bool referenceTypes;
+		 * ##### standard level #####
+		 * bool simd
+		 * ##### mature level #####
+		 * bool atomics;
+		 * bool exceptionHandling;
+		 * bool extendedNameSection;
+		 * bool multipleMemories;
+		 * bool memory64;
+		 * ##### proposed level #####
+		 * bool sharedTables;
+		 * bool allowLegacyInstructionNames;
+		 * bool allowAnyExternKindElemSegments;
+		 * bool quotedNamesInTextFormat;
+		 * bool customSectionsInTextFormat;
+		 * bool interleavedLoadStore;
+		 * bool table64;
+		 * bool nonWASMFunctionTypes;
+		 * ##### wavm level #####
+		 * */
 #define VISIT_FEATURE_DEFAULT_ON(name, ...) bool name;
 #define VISIT_FEATURE_DEFAULT_OFF(name, ...) bool name;
 		WAVM_ENUM_STANDARD_FEATURES(VISIT_FEATURE_DEFAULT_ON)

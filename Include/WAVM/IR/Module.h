@@ -93,27 +93,38 @@ namespace WAVM { namespace IR {
 	typedef InitializerExpressionBase<Uptr> InitializerExpression;
 
 	// A function definition
+	// 函数段记录了函数的类型的索引、代码段记录了函数的局部变量信息和字节码
+	// 因此代码段和函数段组成了WASM的所有函数
+	// 在这里把函数段和代码段的内容合并到了一个数据结构中，统称函数段
+	// 下面就是函数段中一个函数的定义
 	struct FunctionDef
 	{
+		// 函数类型的索引，继承自原WASM的函数段
 		IndexedFunctionType type;
+        // 函数局部变量的信息，也就是每个局部变量的值类型，继承自原WASM的代码段
 		std::vector<ValueType> nonParameterLocalTypes;
+        // 函数的字节码，继承自原WASM的代码段
 		std::vector<U8> code;
 		std::vector<std::vector<Uptr>> branchTables;
 	};
 
 	// A table definition
+	// 表段中存放的就是表类型，因此直接定义即可
 	struct TableDef
 	{
 		TableType type;
 	};
 
 	// A memory definition
+    // 内存段中存放的就是内存类型，因此直接定义即可
 	struct MemoryDef
 	{
 		MemoryType type;
 	};
 
 	// A global definition
+	// 全局段存放的是全局变量，全局变量包括：
+	// 变量类型和初始化表达式
 	struct GlobalDef
 	{
 		GlobalType type;
@@ -338,10 +349,21 @@ namespace WAVM { namespace IR {
 	};
 
 	// A WebAssembly module definition
+	// 正儿八经的用于描述WASM module的结构，包含内容是：
+	// 1、用于描述开启指定特性的字段，featureSpec
+	// 2、WASM规定的11个段：
+	//      类型段，types
+	//      函数段，functions   代码段，exceptionTypes
+	//      表段，tables        元素段，elemSegments
+	//      内存段，memories    数据段，dataSegments
+	//      全局段，globals
+	//      导入段，imports     导出段，exports
+	//      起始段，startFunctionIndex
 	struct Module
 	{
 		FeatureSpec featureSpec;
-
+        //类型段，记录所有的函数（导入的、自定义的）的参数以及返回值的个数和类型
+		//类型段就是函数类型的集合
 		std::vector<FunctionType> types;
 
 		IndexSpace<FunctionDef, IndexedFunctionType> functions;

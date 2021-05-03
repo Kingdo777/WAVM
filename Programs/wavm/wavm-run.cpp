@@ -68,6 +68,16 @@ private:
 	GCPointer<Compartment> compartment;
 };
 
+
+//此函数，将加载WASM、或WAT文件，并返回Runtime::Module
+//若是WASM文件，则调用loadBinaryModule函数
+//      此函数会首先WAVM::loadBinaryModule,将WASM文件中的内容序列化到IR::Module中，
+//      然后编译此Module，产生objCode，IR::Module+objCode就是Runtime::Module
+//      编译产生objCode的过程是可以进行Cache的，WAVM的Cache功能是缓存预编译的objCode而不是我一开始认为IR::Module，
+//      而Faasm的确有IR-Module的缓存
+//若是WAT文件，则调用parseModule函数
+//      此函数的作用是将WAT文件加载到IR::Module中，
+//      然后调用compileModule(irModule)生成RuntimeModule，注意compileModule会自动的调用缓存
 static bool loadTextOrBinaryModule(const char* filename,
 								   std::vector<U8>&& fileBytes,
 								   const IR::FeatureSpec& featureSpec,
@@ -116,10 +126,13 @@ static bool loadPrecompiledModule(std::vector<U8>&& fileBytes,
 								  const IR::FeatureSpec& featureSpec,
 								  ModuleRef& outModule)
 {
+	// Module就是WASM的内存存在形式，也就是将WASM文件解析到内存，用一个数据结构存放WASM各个段的内容，
+	// 因此这一部分是可以直接从文件中恢复的，在FAASM中也有次module的缓存实现
 	IR::Module irModule(featureSpec);
 
 	// Deserialize the module IR from the binary format.
 	WASM::LoadError loadError;
+	// 根据wasm文件，初始化Module，这一步就是把module的各个段进行赋值
 	if(!WASM::loadBinaryModule(fileBytes.data(), fileBytes.size(), irModule, &loadError))
 	{
 		Log::printf(
@@ -128,6 +141,9 @@ static bool loadPrecompiledModule(std::vector<U8>&& fileBytes,
 	}
 
 	// Check for a precompiled object section.
+	// 很据自定义段precompiled_object，来判断是否是预编译过的
+	// 预编译就是把解释执行的代码编译成可执行的代码，编译执行-JIT-解释执行
+	// 而预编译的代码就存放在自定义段precompiled_object中;
 	const CustomSection* precompiledObjectSection = nullptr;
 	for(const CustomSection& customSection : irModule.customSections)
 	{
@@ -217,16 +233,25 @@ enum class ABI
 
 struct State
 {
+	// 用于开启那些特性
 	IR::FeatureSpec featureSpec;
 
 	// Command-line options.
+	// 可执行wasm的文件路径
 	const char* filename = nullptr;
-	const char* functionName = nullptr;
+    // 指定入口函数名称
+    const char* functionName = nullptr;
+	// 挂载的根目录，不知道啥作用
 	const char* rootMountPath = nullptr;
+	// wasm的运行参数
 	std::vector<std::string> runArgs;
+	// 指定ABI，可以
 	ABI abi = ABI::detect;
+	// wasm文件是否是预编译的
 	bool precompiled = false;
+	//是否允许开启AVM object cache
 	bool allowCaching = true;
+	// 追踪Syscall
 	WASI::SyscallTraceLevel wasiTraceLavel = WASI::SyscallTraceLevel::none;
 
 	// Objects that need to be cleaned up before exiting.
@@ -250,6 +275,7 @@ struct State
 		{
 			if(stringStartsWith(*nextArg, "--function="))
 			{
+				// Specify function name to run in module (default:main) 指定函数的入口地址
 				if(functionName)
 				{
 					Log::printf(Log::error,
@@ -261,6 +287,18 @@ struct State
 			}
 			else if(stringStartsWith(*nextArg, "--abi="))
 			{
+                /**
+                 * 指定实现的接口，如果是wasi，那就可以用系统的接口了，自定义的接口应该也是从这里进行设置和导入的
+                 * Specifies the ABI used by the WASM module. See the list
+                 *  of supported ABIs below. The default is to detect the
+                 * ABI based on the module imports/exports.
+                 *
+                 *  none        No ABI: bare virtual metal.
+                 *  emscripten  Emscripten ABI, such as it is.
+                 *  wasi        WebAssembly System Interface ABI.
+                 *
+                 **/
+                 // detect是初值，枚举类型
 				if(abi != ABI::detect)
 				{
 					Log::printf(Log::error, "'--abi=' may only occur once on the command line.\n");
@@ -290,6 +328,36 @@ struct State
 			}
 			else if(!strcmp(*nextArg, "--enable"))
 			{
+				/**
+				 * Enable the specified feature. See the list of supported features below.
+				 *
+				 * Features:
+				 *   mvp                       WebAssembly MVP
+				 *   import-export-mutable-globals   Allows importing and exporting mutable globals
+				 *   non-trapping-float-to-int   Non-trapping float-to-int conversion
+				 *   sign-extension            Sign-extension
+				 *   multivalue                Multiple results and block parameters
+				 *   bulk-memory               Bulk memory
+				 *   ref-types                 Reference types
+				 *   simd                      128-bit SIMD
+				 *   atomics                   Shared memories and atomic instructions
+				 *   exception-handling        Exception handling
+				 *   extended-name-section     Extended name section
+				 *   multi-memory              Multiple memories
+				 *   memory64                  Memories with 64-bit addresses
+				 *   all-proposed              All features proposed for standardization
+				 *
+				 *   shared-tables           * Shared tables
+				 *   legacy-instr-names      * Legacy instruction names
+				 *   any-extern-kind-elems   * Elem segments containing non-func externs
+				 *   quoted-names            * Quoted names in text format
+				 *   wat-custom-sections     * Custom sections in text format
+				 *   interleaved-load-store  * Interleaved SIMD load&store instructions
+				 *   table64                 * Tables with 64-bit indices
+				 *
+				 *   all                     * All features supported by WAVM
+				 *                           * Indicates a non-standard feature
+				 * */
 				++nextArg;
 				if(!*nextArg)
 				{
@@ -310,14 +378,19 @@ struct State
 			}
 			else if(!strcmp(*nextArg, "--precompiled"))
 			{
+				// 是否是预编译的wasm文件，预编译也就是用wavm compile处理过的，预编译之后的文件显然体积更大
+				/** Use precompiled object code in program file **/
 				precompiled = true;
 			}
 			else if(!strcmp(*nextArg, "--nocache"))
 			{
+				//暂时不知道是干嘛的
+				/**Don't use the WAVM object cache**/
 				allowCaching = false;
 			}
 			else if(!strcmp(*nextArg, "--mount-root"))
 			{
+				/**Mounts <dir> as the WASI root directory**/
 				if(rootMountPath)
 				{
 					Log::printf(Log::error,
@@ -378,10 +451,11 @@ struct State
 			showRunHelp(Log::error);
 			return false;
 		}
-
+        // 剩余数据当作WASM的运行参数
 		while(*nextArg) { runArgs.push_back(*nextArg++); };
 
 		// Check that the requested features are supported by the host CPU.
+		// 检查当前的CPU是否支持在--enable中指定的各种特性
 		switch(LLVMJIT::validateTarget(LLVMJIT::getHostTargetSpec(), featureSpec))
 		{
 		case LLVMJIT::TargetValidationResult::valid: break;
@@ -407,13 +481,14 @@ struct State
 		case LLVMJIT::TargetValidationResult::invalidTargetSpec:
 		default: WAVM_UNREACHABLE();
 		};
-
+        // WAVM_SCOPED_DISABLE_SECURE_CRT_WARNINGS是windows相关的，linux下可以认为是直接执行
+		// 环境变量WAVM_OBJECT_CACHE_DIR指定了Obj Cache的存放位置
 		const char* objectCachePath
 			= WAVM_SCOPED_DISABLE_SECURE_CRT_WARNINGS(getenv("WAVM_OBJECT_CACHE_DIR"));
 		if(allowCaching && objectCachePath && *objectCachePath)
 		{
 			Uptr maxBytes = 1024 * 1024 * 1024;
-
+            // WAVM_OBJECT_CACHE_MAX_MB提供了cache的最大内存限制
 			const char* maxMegabytesEnv
 				= WAVM_SCOPED_DISABLE_SECURE_CRT_WARNINGS(getenv("WAVM_OBJECT_CACHE_MAX_MB"));
 			if(maxMegabytesEnv && *maxMegabytesEnv)
@@ -434,6 +509,13 @@ struct State
 			// object code in the cache. If recompiling the module would produce different object
 			// code, the code key should be different, and if recompiling the module would produce
 			// the same object code, the code key should be the same.
+			/***
+			 * 计算一个“代码密钥”，该代码密钥标识将WebAssembly编译为缓存中的目标代码所涉及的代码。
+			 * 如果重新编译模块将产生不同的目标代码，则代码密钥应不同；
+			 * 如果重新编译模块将产生相同的目标代码，则代码密钥应相同。
+			 * 此密钥和clang、WAVM的v版本相关
+			 * */
+			 // 返回llvm的版本信息
 			LLVMJIT::Version llvmjitVersion = LLVMJIT::getVersion();
 			U64 codeKey = 0;
 			codeKey = Hash<U64>()(llvmjitVersion.llvmMajor, codeKey);
@@ -445,6 +527,9 @@ struct State
 			codeKey = Hash<U64>()(WAVM_VERSION_PATCH, codeKey);
 
 			// Initialize the object cache.
+            // object cache缓存了compileModule的执行结果，保存到了MDB数据库，MDB的是微软的一个感觉类似KV的，但是好像有顺序的数据库
+			// ObjectCacheInterface是一种接口，可以自定义实现，这里的实现使用了磁盘的存储
+			// 缓存的是字节类型数据
 			std::shared_ptr<Runtime::ObjectCacheInterface> objectCache;
 			ObjectCache::OpenResult openResult
 				= ObjectCache::open(objectCachePath, maxBytes, codeKey, objectCache);
@@ -483,6 +568,10 @@ struct State
 		return true;
 	}
 
+	// 此函数自动检测Module所使用的ABI
+	// 如果是拥有emscripten_metadata的自定义段，那么就是emscripten，也就是和Js可以胶合，运行在browser上的
+	// 如果导入的函数，全部都是wasi_开头的，那么就是用的wasi的abi
+	// 如果没有导入任何函数没，那么就是没有任何的abi，bare类型
 	bool detectModuleABI(const IR::Module& irModule)
 	{
 		// First, check if the module has an Emscripten metadata section, which is an unambiguous
@@ -541,6 +630,7 @@ struct State
 	bool initABIEnvironment(const IR::Module& irModule)
 	{
 		// If the user didn't specify an ABI on the command-line, try to detect it from the module.
+		// 首先要确定abi的类型，然后才能根据此进行链接
 		if(abi == ABI::detect && !detectModuleABI(irModule)) { return false; }
 
 		// If a directory to mount as the root filesystem was passed on the command-line, create a
@@ -745,6 +835,10 @@ struct State
 	int run(char** argv)
 	{
 		// Parse the command line.
+		// 主要的工作包括：
+		// 根据命令行的参数给State的字段赋值
+		// 检查开启的特性是否在本CPU上支持
+		// 初始化Cache(主要是建立MDB数据库，如果没有的话，数据的添加当然是具体执行WASM的时候)
 		if(!parseCommandLineAndEnvironment(argv)) { return EXIT_FAILURE; }
 
 		// Read the specified file into a byte array.
@@ -753,6 +847,8 @@ struct State
 
 		// Load the module from the byte array
 		Runtime::ModuleRef module = nullptr;
+		// 预编译的WASM已经将objCode写到了自己的自定义段中，因此可以直接获取，
+		// 否则调用loadTextOrBinaryModule，此函数同样的可以通过缓存机制快速获取
 		if(precompiled)
 		{
 			if(!loadPrecompiledModule(std::move(fileBytes), featureSpec, module))
@@ -762,12 +858,17 @@ struct State
 		{
 			return EXIT_FAILURE;
 		}
+		//RuntimeModule=IRModule+objCode
 		const IR::Module& irModule = Runtime::getModuleIR(module);
 
 		// Initialize the ABI-specific environment.
+		// 确定abi的类型
+		// 如果是wasi，那就要设置rootMountPath和配置wasiTraceLevel
+		// 此外,wasi和emscripten还要配置wasiProcess
 		if(!initABIEnvironment(irModule)) { return EXIT_FAILURE; }
 
 		// Link the module with the intrinsic modules.
+		// 将模块与内部模块链接。
 		LinkResult linkResult;
 		if(abi == ABI::emscripten)
 		{
@@ -796,11 +897,13 @@ struct State
 		}
 
 		// Instantiate the module.
+		// 模块实例化
 		Instance* instance = instantiateModule(
 			compartment, module, std::move(linkResult.resolvedImports), filename);
 		if(!instance) { return EXIT_FAILURE; }
 
 		// Take the module's memory as the WASI process memory.
+		// 将模块的内存用作WASI进程内存。
 		if(abi == ABI::wasi)
 		{
 			Memory* memory = asMemoryNullable(getInstanceExport(instance, "memory"));
@@ -838,6 +941,9 @@ struct State
 	int runAndCatchRuntimeExceptions(char** argv)
 	{
 		int result = EXIT_FAILURE;
+		// catchRuntimeExceptions传递两个匿名函数为参数，第一个为run用于执行，第二个用于返回异常
+		// 此函数的主要作用应该是在执行出错时打印调用栈等调试信息，其主体还是运行run函数
+		// 我实际测试了一下，基本上没有卵用，无法准确的定位
 		Runtime::catchRuntimeExceptions([&result, argv, this]() { result = run(argv); },
 										[](Runtime::Exception* exception) {
 											// Treat any unhandled exception as a fatal error.

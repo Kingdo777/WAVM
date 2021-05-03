@@ -111,9 +111,11 @@ int execCompileCommand(int argc, char** argv)
 	const char* inputFilename = nullptr;
 	const char* outputFilename = nullptr;
 	bool useHostTargetSpec = true;
+	// targetSpec包括triple和cpu(x86_64-pc-linux-gnu/skylake;skylakes是intel的第6代cpu)
 	LLVMJIT::TargetSpec targetSpec;
 	IR::FeatureSpec featureSpec;
 	OutputFormat outputFormat = OutputFormat::unspecified;
+	// 对参数进行解析，以对上述定义的变量赋值
 	for(int argIndex = 0; argIndex < argc; ++argIndex)
 	{
 		if(!strcmp(argv[argIndex], "--target-triple"))
@@ -206,16 +208,17 @@ int execCompileCommand(int argc, char** argv)
 			return EXIT_FAILURE;
 		}
 	}
-
+    // 输入输出文件不得为空
 	if(!inputFilename || !outputFilename)
 	{
 		showCompileHelp(Log::error);
 		return EXIT_FAILURE;
 	}
-
+    // 若没有指定targetSpec，就用HOST的
 	if(useHostTargetSpec) { targetSpec = LLVMJIT::getHostTargetSpec(); }
 
 	// Validate the target.
+	// 检查指定的CPU和triple是否支持开启的特性
 	switch(LLVMJIT::validateTarget(targetSpec, featureSpec))
 	{
 	case LLVMJIT::TargetValidationResult::valid: break;
@@ -251,7 +254,7 @@ int execCompileCommand(int argc, char** argv)
 
 	default: WAVM_UNREACHABLE();
 	};
-
+    // 设置默认的编译模式为precompiledModule
 	if(outputFormat == OutputFormat::unspecified)
 	{ outputFormat = OutputFormat::precompiledModule; }
 
