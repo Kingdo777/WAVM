@@ -17,9 +17,11 @@ using namespace WAVM;
 using namespace WAVM::IR;
 using namespace WAVM::Runtime;
 
+// 读wasm文件或wat文件，初始化IR::Module模型
 bool loadTextOrBinaryModule(const char* filename, IR::Module& outModule)
 {
 	// Read the specified file into an array.
+	// 读文件到字符数组
 	std::vector<U8> fileBytes;
 	if(!loadFile(filename, fileBytes)) { return false; }
 
@@ -259,6 +261,8 @@ int execCompileCommand(int argc, char** argv)
 	{ outputFormat = OutputFormat::precompiledModule; }
 
 	// Load the module IR.
+	// 从WASM、WAT文件种加载IR::Module，此时Module就是完整从文件状态到了内存状态
+	// 还需进行链接和实例化，才能成为可以执行实例
 	IR::Module irModule(featureSpec);
 	if(!loadTextOrBinaryModule(inputFilename, irModule)) { return EXIT_FAILURE; }
 

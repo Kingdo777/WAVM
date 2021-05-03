@@ -655,6 +655,7 @@ namespace WAVM { namespace IR {
 	}
 
 	// The type of an external object: something that can be imported or exported from a module.
+	// 在最开始的标准中导出和导入的对象包括了、function、table、memory和global，新标准中添加了exceptionType
 	enum class ExternKind : U8
 	{
 		invalid,
@@ -666,6 +667,7 @@ namespace WAVM { namespace IR {
 		global,
 		exceptionType,
 	};
+	// 外部类型，本质是柔和的导出类型和导入类型
 	struct ExternType
 	{
 		const ExternKind kind;

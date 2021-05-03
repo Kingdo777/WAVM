@@ -101,9 +101,9 @@ namespace WAVM { namespace IR {
 	{
 		// 函数类型的索引，继承自原WASM的函数段
 		IndexedFunctionType type;
-        // 函数局部变量的信息，也就是每个局部变量的值类型，继承自原WASM的代码段
+		// 函数局部变量的信息，也就是每个局部变量的值类型，继承自原WASM的代码段
 		std::vector<ValueType> nonParameterLocalTypes;
-        // 函数的字节码，继承自原WASM的代码段
+		// 函数的字节码，继承自原WASM的代码段
 		std::vector<U8> code;
 		std::vector<std::vector<Uptr>> branchTables;
 	};
@@ -116,7 +116,7 @@ namespace WAVM { namespace IR {
 	};
 
 	// A memory definition
-    // 内存段中存放的就是内存类型，因此直接定义即可
+	// 内存段中存放的就是内存类型，因此直接定义即可
 	struct MemoryDef
 	{
 		MemoryType type;
@@ -132,12 +132,17 @@ namespace WAVM { namespace IR {
 	};
 
 	// A tagged tuple type definition
+	// 这应该是最新的标准中的异常段
 	struct ExceptionTypeDef
 	{
 		ExceptionType type;
 	};
 
 	// Describes an object imported into a module or a specific type
+	// 这里定义了一个模板数据结构，用于描述导入段的导入类型
+	// 导入导出只能操作4个对象（不考虑exception）也就是函数、内存、全局变量和表，其中函数指的是函数段的内容，即函数类型索引
+	// 导入的条目首先要确定自己的导入类型，在WASM中有一个自己的tag来标志，在这里的实现上是给每一种导入类型定义了一个统一的模板类
+	// 导入条目的主要内容是所导入的模块名和项目名，这都是字符串，又称作symbol，最终将在链接阶段把导入导出的内容链接起来
 	template<typename Type> struct Import
 	{
 		Type type;
@@ -152,6 +157,12 @@ namespace WAVM { namespace IR {
 	typedef Import<ExceptionType> ExceptionTypeImport;
 
 	// Describes an export from a module.
+	// 对于导出条目，主要是
+	// ·
+	// 条目的名字，此处同Import中的exportName是指一个，只有被导出的才能被其他的module导入，所以导出时
+	//   定义的名字，要和导入时保持一直
+	// · 导出的类型，ExternKind是枚举类型
+	// · 导出的索引，module中所有的导出项都是有索引的，通过具体的索引找到具体的项目
 	struct Export
 	{
 		std::string name;
@@ -163,6 +174,14 @@ namespace WAVM { namespace IR {
 	};
 
 	// Identifies an element of a kind-specific IndexSpace in a module.
+	// WAVM实现的导入段的表项，只有类型和索引
+	// 其实上面实现的Import才是完整的导入段的定义
+	// WAVM在实现导入段时候直接将导入的部分添加到了各自的实现的段上去了
+	// 自己仅仅留下了对于各个段的索引
+	// 比如有一个导入的全局变量 env.PORT
+	// 原本导入段应该包括了此导入项的类型(global)，moduleName(env)，ImportName(PORT)
+	// 但是在实现上我们是把env.PORT扔到了全局段中了，因为在下面定义的IndexSpace中是把导入的部分和自己实现的部分柔和到一起了
+	// 这样我们只需要在导入段中保留索引，在IndexSpace<GlobalDef,GlobalType>中就可以找到了
 	struct KindAndIndex
 	{
 		ExternKind kind;
@@ -176,6 +195,13 @@ namespace WAVM { namespace IR {
 
 	// A data segment: a literal sequence of bytes that is copied into a Runtime::Memory when
 	// instantiating a module
+	// 数据段：实例化模块时复制到Runtime :: Memory中的字节的文字序列
+	//	准去地说，这里的DataSegment是数据段的一个条目，包括上面的Import、Export，下面的ElemSegment、CustomSection
+	//	都分别是导入段、导出段、元素段和自定义段的条目
+	//	数据段条目的主要内容包括：
+	//	内存索引，及要初始化那一块内存
+	//	偏移量，即从哪里开始初始化
+	//	字节数组，即初始化具体内容
 	struct DataSegment
 	{
 		bool isActive;
@@ -243,6 +269,8 @@ namespace WAVM { namespace IR {
 	};
 
 	// An elem segment: a literal sequence of table elements.
+	// 元素段是对表的初始化，一开始的标准，表内容只能是函数索引
+	// 猜测对应于Encoding==index Type==active
 	struct ElemSegment
 	{
 		enum class Encoding
@@ -279,6 +307,9 @@ namespace WAVM { namespace IR {
 	};
 
 	// Identifies sections in the binary format of a module in the order they are required to occur.
+	// 每个段都有自己的ID分别是：
+	// 类型段（1）、导入（2）导出段（7）、函数（3）代码段（10）、表（4）元素段（9）、内存（5）数据段（11）、全局段（6）、起始段（8）
+	// 以及0号的自定义段
 	enum class OrderedSectionID : U8
 	{
 		moduleBeginning,
@@ -301,6 +332,7 @@ namespace WAVM { namespace IR {
 	WAVM_API const char* asString(OrderedSectionID id);
 
 	// A custom module section as an array of bytes
+	// 自定义段是一个字节数组，WASM可以拥有多个自定义段，每个自定义端都拥有一个唯一的name字符串标志
 	struct CustomSection
 	{
 		OrderedSectionID afterSection{OrderedSectionID::moduleBeginning};
@@ -317,6 +349,19 @@ namespace WAVM { namespace IR {
 	};
 
 	// An index-space for imports and definitions of a specific kind.
+	// 此数据结构用于描述可导入的四个（其实是5个，但是还是先不考虑exception）
+	// 之所以如此是因为这个四个段的条目分为两部分，一部分是从外部导入的，一部分是自己定义的
+	// 对于自己定义的，他们都有自己的专门的数据结构：FunctionDef、MemoryDef、TableDef、GlobalDef
+	// 对于导入的也有自己的专门的数据结构：Import<Type>，这是模板类，包括了：
+    //	typedef Import<IndexedFunctionType> FunctionImport;
+    //	typedef Import<TableType> TableImport;
+    //	typedef Import<MemoryType> MemoryImport;
+    //	typedef Import<GlobalType> GlobalImport;
+	// 其实他们的区别真的很小，如果不考虑Global，各自的类型就是各自段中的条目，因为Function、Memory、Table的
+	// 实际内容都在code、data、element中定义
+	// 但是在实现上，WAVM把函数段和代码段融合到一起了，GlobalType中是不包括全局变量的具体数值的，数值是在GlobalDef中包含的
+	// Import<Type>其实就是在各自Type的基础之上添加了模块名和导出时定义的名字
+	// 因此下面这个数据结构将上述两种定义融合到一块，组成了函数段、表段、内存段、全局段
 	template<typename Definition, typename Type> struct IndexSpace
 	{
 		std::vector<Import<Type>> imports;
@@ -353,7 +398,7 @@ namespace WAVM { namespace IR {
 	// 1、用于描述开启指定特性的字段，featureSpec
 	// 2、WASM规定的11个段：
 	//      类型段，types
-	//      函数段，functions   代码段，exceptionTypes
+	//      函数段+代码段，functions
 	//      表段，tables        元素段，elemSegments
 	//      内存段，memories    数据段，dataSegments
 	//      全局段，globals
@@ -362,7 +407,7 @@ namespace WAVM { namespace IR {
 	struct Module
 	{
 		FeatureSpec featureSpec;
-        //类型段，记录所有的函数（导入的、自定义的）的参数以及返回值的个数和类型
+		//类型段，记录所有的函数（导入的、自定义的）的参数以及返回值的个数和类型
 		//类型段就是函数类型的集合
 		std::vector<FunctionType> types;
 
@@ -434,6 +479,7 @@ namespace WAVM { namespace IR {
 												   OrderedSectionID maxSection);
 
 	// Resolve an indexed block type to a FunctionType.
+	// 将快类型解析为函数类型，要我说就是找麻烦，直接用函数索引不就好了吗
 	inline FunctionType resolveBlockType(const Module& module, const IndexedBlockType& indexedType)
 	{
 		switch(indexedType.format)
@@ -472,7 +518,7 @@ namespace WAVM { namespace IR {
 		std::vector<std::string> dataSegments;
 		std::vector<std::string> exceptionTypes;
 	};
-
+	// Func的名字也就是symbol是记录在自定义段的
 	// Looks for a name section in a module. If it exists, deserialize it into outNames.
 	// If it doesn't exist, fill outNames with sensible defaults.
 	WAVM_API void getDisassemblyNames(const Module& module, DisassemblyNames& outNames);
