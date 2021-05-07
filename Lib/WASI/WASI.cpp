@@ -172,6 +172,17 @@ WAVM_DEFINE_INTRINSIC_FUNCTION(wasi,
 }
 
 //WAVM_DEFINE_INTRINSIC_FUNCTION(wasi, "sched_yield", __wasi_errno_return_t, wasi_sched_yield)
+// 在这里我手动的替换了WAVM_DEFINE_INTRINSIC_FUNCTION这个举足轻重的宏定义
+// 此宏定义定义了一下三个内容，一个函数的声明、一个静态全局变量、一个对于函数声明的定义
+// 静态全局意味着仅在本文件中可见
+// wasi_sched_yieldIntrinsic是一个Intrinsics::Function类静态全局的数据对象，静态全局意味着在程序运行之前，就已经预先
+// 为其分配了数据空间，并执行了其构造函数，在构造函数中，传递的参数包括了：
+// 1、一个静态对象变量Intrinsics::Module module的地址指针,在WAVM_DEFINE_INTRINSIC_FUNCTION中的第一个参数也就是wasi,将一一对应于
+//    一个全局的Intrinsics::Module module的地址指针,Intrinsics::Module中存放了4个可导出对象的Vector,最重要的也就是Function
+//    构造函数的主要作用就是将WAVM_DEFINE_INTRINSIC_FUNCTION定义的函数写到Function Vector中
+// 2、函数名
+// 3、函数的地址指针,主义,函数本身就是类似于数组名的指针,这里取的是函数指针的地址,并将其转化为(void *)
+// 4、函数类型,这里需要进行转化,将函数声明转换为我们之前定义的FunctionType
 static __wasi_errno_return_t wasi_sched_yield(
     WAVM::Runtime::ContextRuntimeData* contextRuntimeData);
 static WAVM::Intrinsics::Function wasi_sched_yieldIntrinsic(
@@ -214,8 +225,11 @@ std::shared_ptr<Process> WASI::createProcess(Runtime::Compartment* compartment,
 	process->fileSystem = fileSystem;
 
 	process->compartment = compartment;
+	// setUserData是对compartment所继承的GCObject的userData进行的操作
+	// GCObject的析构函数中会执行(*finalizeUserData)(userData); 因此这里需要传递userData和其释放函数finalizeUserData
+	// 在这里finalize传递的是nullptr，因此不会执行此函数
 	setUserData(process->compartment, process.get(), nullptr);
-
+    // 创建内部的WASM-Module 用作外部函数
 	Instance* wasi_snapshot_preview1
 		= Intrinsics::instantiateModule(compartment,
 										{getIntrinsicModule_wasi(),
@@ -239,6 +253,8 @@ std::shared_ptr<Process> WASI::createProcess(Runtime::Compartment* compartment,
 	{
 		// Map the root directory as both / and ., which allows files to be opened from it using
 		// either "/file" or just "file".
+		// 虽然我还没搞明白这一部分的实现但是，他的目标好像是和Mount NS类似，但是在实现上时用户态，没有对文件系统有任何的修改
+		// 先理解为在用户指定路径的基础上加了一个前缀
 		const char* preopenedRootAliases[2] = {"/", "."};
 		for(Uptr aliasIndex = 0; aliasIndex < 2; ++aliasIndex)
 		{

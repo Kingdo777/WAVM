@@ -160,7 +160,7 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	WAVM_ASSERT(memories.size() == module->ir.memories.imports.size());
 	WAVM_ASSERT(globals.size() == module->ir.globals.imports.size());
 	WAVM_ASSERT(exceptionTypes.size() == module->ir.exceptionTypes.imports.size());
-
+    // 从indexMap中取一个id,并用nullptr占位
 	Uptr id = UINTPTR_MAX;
 	{
 		Platform::RWMutex::ExclusiveLock compartmentLock(compartment->mutex);
@@ -242,6 +242,7 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	}
 
 	// Set up the values to bind to the symbols in the LLVMJIT object code.
+	// 设置值以绑定到LLVMJIT对象代码中的符号。
 	HashMap<std::string, LLVMJIT::FunctionBinding> wavmIntrinsicsExportMap;
 	for(const HashMapPair<std::string, Intrinsics::Function*>& intrinsicFunctionPair :
 		Intrinsics::getUninstantiatedFunctions({WAVM_INTRINSIC_MODULE_REF(wavmIntrinsics),
@@ -253,7 +254,9 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 		LLVMJIT::FunctionBinding functionBinding{intrinsicFunctionPair.value->getNativeFunction()};
 		wavmIntrinsicsExportMap.add(intrinsicFunctionPair.key, functionBinding);
 	}
-
+    // 将function写入 jitFunctionImports 或者 functions
+	// 对于内部WASM,一定是写入jitFunctionImports
+	// 而对于自定义的WASM,则一定是functions,因为其导入的function不可能是本地函数
 	std::vector<Function*> functions;
 	std::vector<LLVMJIT::FunctionBinding> jitFunctionImports;
 	for(Uptr importIndex = 0; importIndex < module->ir.functions.imports.size(); ++importIndex)
@@ -296,6 +299,7 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	{ jitExceptionTypes.push_back({exceptionType->id}); }
 
 	// Create a FunctionMutableData for each function definition.
+	// 为每个函数定义创建一个FunctionMutableData
 	std::vector<FunctionMutableData*> functionDefMutableDatas;
 	for(Uptr functionDefIndex = 0; functionDefIndex < module->ir.functions.defs.size();
 		++functionDefIndex)
@@ -311,9 +315,11 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	}
 
 	// Load the compiled module's object code with this instance's imports.
+    // 使用此实例的导入加载已编译模块的目标代码。
 	std::vector<FunctionType> jitTypes = module->ir.types;
 	std::vector<Runtime::Function*> jitFunctionDefs;
 	jitFunctionDefs.resize(module->ir.functions.defs.size(), nullptr);
+    // LLVMJIT::loadModule用已编译的函数填充在functionDefMutableDatas的函数指针中,并将这些功能添加到模块中。
 	std::shared_ptr<LLVMJIT::Module> jitModule
 		= LLVMJIT::loadModule(module->objectCode,
 							  std::move(wavmIntrinsicsExportMap),

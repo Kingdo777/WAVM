@@ -28,6 +28,7 @@ namespace WAVM { namespace Serialization {
 
 		// Advances the stream cursor by numBytes, and returns a pointer to the previous stream
 		// cursor.
+		// 将流游标前进numBytes，并返回指向前一个流游标的指针。
 		inline U8* advance(Uptr numBytes)
 		{
 			if(Uptr(end - next) < numBytes) { extendBuffer(numBytes); }
@@ -52,6 +53,7 @@ namespace WAVM { namespace Serialization {
 	struct ArrayOutputStream : public OutputStream
 	{
 		// Moves the output array from the stream to the caller.
+		// 执行此操作后,bytes内容将直接作废(数据还在,但是再写入将会覆盖),返回值是大小刚好的vector
 		std::vector<U8>&& getBytes()
 		{
 			bytes.resize(next - bytes.data());

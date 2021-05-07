@@ -38,6 +38,7 @@ using namespace WAVM::IR;
 using namespace WAVM::Runtime;
 
 // A resolver that generates a stub if an inner resolver does not resolve a name.
+// abi == ABI::emscripten时才会用到
 struct StubFallbackResolver : Resolver
 {
 	StubFallbackResolver(Resolver& inInnerResolver, Compartment* inCompartment)
@@ -869,6 +870,15 @@ struct State
 
 		// Link the module with the intrinsic modules.
 		// 将模块与内部模块链接。
+		// 链接的过程是使用解析器(Resolver)将需要导入的各种对象，写入到linkResult定义的数组中
+		// linkResult使用的是resolvedImports：
+        // struct Object
+        //	{
+        //		const ObjectKind kind;
+        //	};
+        // typedef std::vector<Object*> ImportBindings;
+		// ImportBindings resolvedImports;
+		// 不过呢，Object里仅仅就是类型而已。。。没有实际的内容
 		LinkResult linkResult;
 		if(abi == ABI::emscripten)
 		{
@@ -904,6 +914,7 @@ struct State
 
 		// Take the module's memory as the WASI process memory.
 		// 将模块的内存用作WASI进程内存。
+		// wasi的程序一定有一个名为memory的导出项,将其复制给ProcessMemory
 		if(abi == ABI::wasi)
 		{
 			Memory* memory = asMemoryNullable(getInstanceExport(instance, "memory"));
@@ -917,6 +928,7 @@ struct State
 
 		// Execute the program.
 		Timing::Timer executionTimer;
+		// 字节码已经写到instance中了
 		auto executeThunk = [&] { return execute(irModule, instance); };
 		int result;
 		if(emscriptenProcess) { result = Emscripten::catchExit(std::move(executeThunk)); }

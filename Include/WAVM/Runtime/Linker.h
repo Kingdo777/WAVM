@@ -71,6 +71,7 @@ namespace WAVM { namespace Runtime {
 
 	// Links a module using the given resolver, returning an array mapping import indices to
 	// objects. If the resolver fails to resolve any imports, throws a LinkException.
+	// 使用给定的解析器链接模块，返回将导入索引映射到对象的数组。 如果解析器无法解析任何导入，则抛出LinkException。
 	struct LinkResult
 	{
 		struct MissingImport
@@ -79,8 +80,13 @@ namespace WAVM { namespace Runtime {
 			std::string exportName;
 			IR::ExternType type;
 		};
-
+        // 真正起作用的是resolvedImports，如果success的话，missingImports应该是空的，他描述的是没找到的导入项
 		std::vector<MissingImport> missingImports;
+		// typedef std::vector<Object*> ImportBindings;
+		// struct Object
+		//	{
+		//		const ObjectKind kind;
+		//	};
 		ImportBindings resolvedImports;
 		bool success{false};
 	};

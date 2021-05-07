@@ -1,0 +1,34 @@
+run：
+	parseCommandLineAndEnvironment()
+	····根据命令行的参数给State的字段赋值
+	····检查开启的特性是否在本CPU上支持
+	····初始化Cache(主要是建立MDB数据库，具体执行WASM的时候再添加数据，cache的内容是同compile一样的objcode)
+	loadTextOrBinaryModule()
+	····解析wasm/wat文件，生成Runtime::Module(Runtime::Module = IR:Module + objcode)
+	initABIEnvironment()
+	····确定使用的ABI类型（一下均以WASI为例）
+	····如果是wasi，且指定了rootMountPath，则需要配置sandboxFS
+	····创建Process
+		createProcess()
+		····对compartment执行了setUserData，但是此函数是没有任何操作的在这里
+		····调用instantiateModule创建内部的WASM的Instance，此Instance是WASI实现的主要接口，instantiateModule传递一个拥有4个元素的列表，每个元素都是一个Intrinsics::Module module，这是一个静态变量，里面已经初始化预定义的内部函数
+			Instance* wasi_snapshot_preview1 = Intrinsics::instantiateModule()
+			····将自定义的函数写到了新建的IRModule的types,functions.imports和import中，函数的地址指针写入functionImportBindings
+			····将local_get和call、end指令编码到codeStream中，变成字节数组
+			····将自定义的函数再写入functions.def和export中，其实函数的字节码为codeStream
+			····编译irModule生成Runtime::Module
+			····调用instantiateModuleInternal生成实例
+				instantiateModuleInternal(compartment,module,functionImports,{},{},{},{},debugName)
+				····四个空{}是其余四个导入项，在这里都没有，functionImports也仅仅包括自定义的本地函数，其值为函数指针
+		····将内部的Intance写入解析器，这样在执行链接时找到内部的WASM模块，就可以从内部的Intance中导入
+			process->resolver.moduleNameToInstanceMap.set("wasi_unstable", wasi_snapshot_preview1);
+		····配置三个fd(stdin/stdin/stderr)到fdMap
+		····如果配置了sandboxFS，那么将sandboxFS的根目录添加到fdMap，保证所有的打开文件都是从sandboxFS中的
+	linkModule(IrModule,ProcessResolver)
+	····通过ProcessResolver将IrModule需要导入的对象写入到ImportBindings(Object *)类型的resolvedImports中,Object *可以和Function *等相互转化
+	Runtime::tantiateModule(compartment, module, std::move(linkResult.resolvedImports), filename)
+	····分析resolvedImports，构造5中导入的Vector
+		instantiateModuleInternal(compartment,module,functionImports,tableImports,memoryImports,globalImports,exceptionTypeImports,debugName)
+	WASI::setProcessMemory(*wasiProcess, memory)
+	····对于wasi接口的wasm，一定存在一个名为memory的导出项，需要将其赋值给ProcessMemory
+	execute(irModule, instance);

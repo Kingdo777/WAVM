@@ -26,6 +26,8 @@ namespace WAVM { namespace Runtime {
 
 	// Runtime object types. This must be a superset of IR::ExternKind, with IR::ExternKind
 	// values having the same representation in Runtime::ObjectKind.
+    // 运行时对象类型。 这必须是IR :: ExternKind的超集，并且IR :: ExternKind值
+	// 在Runtime :: ObjectKind中具有相同的表示形式。
 	enum class ObjectKind : U8
 	{
 		invalid = (U8)IR::ExternKind::invalid,
@@ -43,6 +45,7 @@ namespace WAVM { namespace Runtime {
 		compartment,
 		foreign,
 	};
+	// 下面的断言保证Runtime的ObjectKind和IR::ExternKind保持一致
 	static_assert(Uptr(IR::ExternKind::function) == Uptr(ObjectKind::function),
 				  "IR::ExternKind::function != ObjectKind::function");
 	static_assert(Uptr(IR::ExternKind::table) == Uptr(ObjectKind::table),
