@@ -779,6 +779,7 @@ struct State
 		else if(abi == ABI::wasi || abi == ABI::emscripten)
 		{
 			// WASI/Emscripten just calls a _start function with the signature ()->().
+			// 在这里默认_start的是没有参数也没有返回值的，因为给了FunctionType()，这样的空类型去验证
 			function = getTypedInstanceExport(instance, "_start", FunctionType());
 			if(!function)
 			{
@@ -879,6 +880,8 @@ struct State
         // typedef std::vector<Object*> ImportBindings;
 		// ImportBindings resolvedImports;
 		// 不过呢，Object里仅仅就是类型而已。。。没有实际的内容
+		// 是我傻逼了，除了函数之外的所有的对象(Table\Memory\Global等)都是继承了Object，函数对象虽然没有继承，但是其结构体的第一个字段就是Object
+		// ImportBindings是Object*类型，其存放的其实是指向各个类型的对应的实体的指针，真的是牛逼的写法
 		LinkResult linkResult;
 		if(abi == ABI::emscripten)
 		{

@@ -69,18 +69,21 @@ Instance::~Instance()
 	}
 }
 
+// 生成非内部wasm实例的预备函数
 Instance* Runtime::instantiateModule(Compartment* compartment,
 									 ModuleConstRefParam module,
-									 ImportBindings&& imports,
+									 ImportBindings&& imports,// 这里存放的是linkResult的结果。linkResult包含了所有的导入对象
 									 std::string&& moduleDebugName,
 									 ResourceQuotaRefParam resourceQuota)
 {
 	// Check the types of the Instance's imports, and build per-kind import arrays.
+	// 以下都是对于导入项的处理
 	std::vector<FunctionImportBinding> functionImports;
 	std::vector<Table*> tableImports;
 	std::vector<Memory*> memoryImports;
 	std::vector<Global*> globalImports;
 	std::vector<ExceptionType*> exceptionTypeImports;
+	// 下面的操作想对于内部函数的操作可以说是非常简单了，因为内部函数需要自己创建Function*
 	WAVM_ERROR_UNLESS(imports.size() == module->ir.imports.size());
 	for(Uptr importIndex = 0; importIndex < imports.size(); ++importIndex)
 	{
@@ -145,6 +148,9 @@ Instance* Runtime::instantiateModule(Compartment* compartment,
 									 resourceQuota);
 }
 
+// 真正生成实力的地方，目前来看生成实例，也就是将自己的function、memory、table、Global生成Runtime的Function、Memory等对象
+// 传入的参数主要包括了导入的对象，需要注意，导入的对象其实就是其他的实例所定义的Runtime的Function、Memory等对象的指针
+// functionImports可能不同，对于内部函数，其值一定是本地函数的地址 对于自定义的WASM，其值一定是FUnction×
 Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 											 ModuleConstRefParam module,
 											 std::vector<FunctionImportBinding>&& functionImports,
@@ -172,6 +178,10 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	DisassemblyNames disassemblyNames;
 	getDisassemblyNames(module->ir, disassemblyNames);
 
+	// 以下是对除函数以外四个可导入对象的实例化
+	// 大体的过程就是将defs的内容生成Runtime的对象
+	// 然后将其指针压栈到参数对应的容器中
+	// 这样参数中的容器指针就是完整的此WASM所需要的Runtime对象
 	// Instantiate the module's memory and table definitions.
 	for(Uptr tableDefIndex = 0; tableDefIndex < module->ir.tables.defs.size(); ++tableDefIndex)
 	{
@@ -242,7 +252,14 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	}
 
 	// Set up the values to bind to the symbols in the LLVMJIT object code.
-	// 设置值以绑定到LLVMJIT对象代码中的符号。
+	// 从名字和定义都可以看出来，wavmIntrinsicsExportMap是为内部WASM设置的
+	// struct FunctionBinding
+	//	{
+	//		const void* code;
+	//	};
+	// 这里是WAVM一些更内部函数，比如对divideByZeroOrIntegerOverflowTrap的处理等
+	// 将在这里构造一个函数名和函数地址的map
+	// 其定义方式使用的宏和WASI等是完全相同的
 	HashMap<std::string, LLVMJIT::FunctionBinding> wavmIntrinsicsExportMap;
 	for(const HashMapPair<std::string, Intrinsics::Function*>& intrinsicFunctionPair :
 		Intrinsics::getUninstantiatedFunctions({WAVM_INTRINSIC_MODULE_REF(wavmIntrinsics),
@@ -254,9 +271,17 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 		LLVMJIT::FunctionBinding functionBinding{intrinsicFunctionPair.value->getNativeFunction()};
 		wavmIntrinsicsExportMap.add(intrinsicFunctionPair.key, functionBinding);
 	}
-    // 将function写入 jitFunctionImports 或者 functions
-	// 对于内部WASM,一定是写入jitFunctionImports
-	// 而对于自定义的WASM,则一定是functions,因为其导入的function不可能是本地函数
+	// 内部WASM的导入一定是本地函数，自定义WASM的导入一定是Function对象
+	// struct FunctionBinding
+	//	{
+	//		const void* code;
+	//	};
+	// functions就是Runtime的对像
+	// jitFunctionImports是对导入的函数JIT的记录
+	// 对于内部的WASM，其functions用nullptr占位，因为他们的导入项是没有Function的
+	// 对于自定义的WASM，jitFunctionImports记录其字节码地址，对于内部WASM，jitFunctionImports记录函数指针
+	// 我们用CallingConvention来区别是否为自定义的WASM
+	// 注意此处仅仅包含了导入的function部分
 	std::vector<Function*> functions;
 	std::vector<LLVMJIT::FunctionBinding> jitFunctionImports;
 	for(Uptr importIndex = 0; importIndex < module->ir.functions.imports.size(); ++importIndex)
@@ -274,7 +299,18 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 			jitFunctionImports.push_back({functionImports[importIndex].nativeFunction});
 		}
 	}
-
+    // jit分别对其他对象也有所指，除global外是Object的id字段,这个id对应了compartment中的Id
+	// struct GlobalBinding
+	//	{
+	//		IR::GlobalType type;
+	//		union
+	//		{
+	//			const IR::UntaggedValue* immutableValuePointer;
+	//			Uptr mutableGlobalIndex;
+	//		};
+	//	};
+	// global则分为可变和不可变讨论，可变的放在compartment的runtimeData的ContextRuntimeData的mutableGlobals中，不可变得则放在Global的对象中
+	// 前者用索引寻址，后者用指针寻址
 	std::vector<LLVMJIT::TableBinding> jitTables;
 	for(Table* table : tables) { jitTables.push_back({table->id}); }
 
@@ -299,7 +335,8 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	{ jitExceptionTypes.push_back({exceptionType->id}); }
 
 	// Create a FunctionMutableData for each function definition.
-	// 为每个函数定义创建一个FunctionMutableData
+	// 主要还是看函数的构造过程，前面的functions和jitFunctionImports中仅仅是导入的部分
+	// 首先为为每个函数定义创建一个FunctionMutableData，这里仅仅定义了此结构的debugName,算是先搞一个空壳
 	std::vector<FunctionMutableData*> functionDefMutableDatas;
 	for(Uptr functionDefIndex = 0; functionDefIndex < module->ir.functions.defs.size();
 		++functionDefIndex)
@@ -317,6 +354,7 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	// Load the compiled module's object code with this instance's imports.
     // 使用此实例的导入加载已编译模块的目标代码。
 	std::vector<FunctionType> jitTypes = module->ir.types;
+	// 下面两行没用，注释掉都可以
 	std::vector<Runtime::Function*> jitFunctionDefs;
 	jitFunctionDefs.resize(module->ir.functions.defs.size(), nullptr);
     // LLVMJIT::loadModule用已编译的函数填充在functionDefMutableDatas的函数指针中,并将这些功能添加到模块中。
@@ -340,6 +378,10 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	{ functions.push_back(functionMutableData->function); }
 
 	// Set up the instance's exports.
+	// 在这里配置了export的exportMap
+	// 从下面的函数中可以看出，自己导入的项也是可以被导出的
+	// 对于内部函数，其导入项是本地函数，没有Function×对应，是不能被导出的，被导出的是其trunks函数
+	//
 	HashMap<std::string, Object*> exportMap;
 	std::vector<Object*> exports;
 	for(const Export& exportIt : module->ir.exports)

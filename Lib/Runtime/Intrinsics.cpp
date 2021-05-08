@@ -89,6 +89,15 @@ Intrinsics::Memory::Memory(Intrinsics::Module* moduleRef,
 	moduleRef->impl->memoryMap.set(name, this);
 }
 
+// 这是内部WASM在生成实例的时候的预备函数
+// 此函数的主要功能是，将initializer_list这个列表中的Intrinsics::Module 转化为IR：：Module
+// 主要是转化4个对象，主要的主要还是转化函数对象
+// 对于其他三个，只需要根据Intrinsics::Module::Memory、Table、Global的内容生成Runtime：：Module::Memory、Table、Global即可
+// 注意的是这三个对象是对应于defs和export
+// 对于函数而言，则是生成为type、import和function.import,同时生成了functionImportBindings，用于传递给instantiateModuleInternal
+// 但是functionImportBindings中存放的并不是Function× 而是本地代码的函数指针
+// 我们还需与要为自定义的函数生成chunks，并将chunks写入defs和export
+// 也就是本地的函数是作为导入函数处理的，我们生成的chunks函数将被导出给用户使用
 Instance* Intrinsics::instantiateModule(
 	Compartment* compartment,
 	const std::initializer_list<const Intrinsics::Module*>& moduleRefs,
@@ -241,7 +250,7 @@ Instance* Intrinsics::instantiateModule(
 						   exception.message.c_str());
 		}
 	}
-
+    // 生成编译的Runtime：：Module
 	ModuleRef module = compileModule(irModule);
 	Instance* instance = instantiateModuleInternal(compartment,
 												   module,

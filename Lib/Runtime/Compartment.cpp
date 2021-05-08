@@ -191,11 +191,14 @@ bool Runtime::isInCompartment(const Object* object, const Compartment* compartme
 		// The function may be in multiple compartments, but if this compartment maps the function's
 		// instanceId to a Instance with the LLVMJIT LoadedModule that contains this
 		// function, then the function is in this compartment.
+		// 该函数可能在多个隔离专区中，但是如果此隔离专区将该函数的instanceId映射到具有包含函数的的LLVMJIT LoadedModule的实例，则该功能位于该隔离专区中。
 		Function* function = (Function*)object;
 
 		// Treat functions with instanceId=UINTPTR_MAX as if they are in all compartments.
+		// 将instanceId = UINTPTR_MAX的函数视为在所有隔离专区中。
+		// 这个应该是目前还没有实现
 		if(function->instanceId == UINTPTR_MAX) { return true; }
-
+        // 检查参数如果是
 		Platform::RWMutex::ShareableLock compartmentLock(compartment->mutex);
 		if(!compartment->instances.contains(function->instanceId)) { return false; }
 		Instance* instance = compartment->instances[function->instanceId];

@@ -24,6 +24,7 @@ void Runtime::invokeFunction(Context* context,
 	FunctionType functionType{function->encodedType};
 
 	// Verify that the invoke signature matches the function being invoked.
+    // 验证调用签名是否与正在调用的函数匹配
 	if(invokeSig != functionType && !isSubtype(functionType, invokeSig))
 	{
 		if(Log::isCategoryEnabled(Log::debug))
@@ -39,6 +40,7 @@ void Runtime::invokeFunction(Context* context,
 
 	// Assert that the function, the context, and any reference arguments are all in the same
 	// compartment.
+	// 断言 所有的function和引用类型的参数都必须是包含于同一个compartment
 	if(WAVM_ENABLE_ASSERTS)
 	{
 		WAVM_ASSERT(isInCompartment(asObject(function), context->compartment));

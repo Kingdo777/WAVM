@@ -171,6 +171,7 @@ namespace WAVM { namespace Runtime {
 
 	// Metadata about a function, used to hold data that can't be emitted directly in an object
 	// file, or must be mutable.
+	// 有关函数的元数据，用于保存不能直接在目标文件中发出或必须可变的数据。
 	struct FunctionMutableData
 	{
 		LLVMJIT::Module* jitModule = nullptr;
