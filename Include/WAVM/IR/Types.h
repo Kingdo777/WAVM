@@ -445,6 +445,7 @@ namespace WAVM { namespace IR {
 	// The index type for a memory or table.
 	// 这里看不懂，这个定义的作用，内存和表目前只能是一个，他们的索引只能是0,索引类型是什么？？
 	// 可能标准已经放开了限制,但是索引一般不会太大，于是默认索引都是I32,但是为了将来考虑，还是允许使用I64的索引？？
+	// 基本上确定了，就是memory是64位还是32位的意思
 	enum class IndexType : U8
 	{
 		i32 = U8(ValueType::i32),

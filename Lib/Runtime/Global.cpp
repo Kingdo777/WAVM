@@ -21,14 +21,16 @@ Global* Runtime::createGlobal(Compartment* compartment,
 							  ResourceQuotaRefParam resourceQuota)
 {
 	U32 mutableGlobalIndex = UINT32_MAX;
+	// 在一个compartment中，Global的是全局可见的（即所有的Instance之间，当然前提是导入之后），可变全局变量的索引是由compartment管理
 	if(type.isMutable)
 	{
 		mutableGlobalIndex = compartment->globalDataAllocationMask.getSmallestNonMember();
 		if(mutableGlobalIndex == maxMutableGlobals) { return nullptr; }
 		compartment->globalDataAllocationMask.add(mutableGlobalIndex);
-
+        // 将全局变量进行0值初始化
 		// Zero-initialize the global's mutable value for all current and future contexts.
 		compartment->initialContextMutableGlobals[mutableGlobalIndex] = IR::UntaggedValue();
+		// 目前context只会有一个，在compartment的CompartmentRuntimeData定义中可以看出来，其主要作用目前是存放全局变量，so？为什么需要两个
 		for(Context* context : compartment->contexts)
 		{ context->runtimeData->mutableGlobals[mutableGlobalIndex] = IR::UntaggedValue(); }
 	}
