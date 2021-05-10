@@ -464,6 +464,8 @@ Module::Module(const std::vector<U8>& objectBytes,
 	}
 
 	// Use the LLVM object loader to load the object.
+	// 应该是在这一步完成了我说的链接操作，也就是统计object中的symbol，然后将symbol的地址信息，根据importedSymbolMap提供的
+	// 的信息，获得其地址
 	std::unique_ptr<llvm::RuntimeDyld::LoadedObjectInfo> loadedObject = loader.loadObject(*object);
 	loader.finalizeWithMemoryManagerLocking();
 	if(loader.hasError())
@@ -535,6 +537,7 @@ Module::Module(const std::vector<U8>& objectBytes,
 #endif
 
 	// Iterate over the functions in the loaded object.
+	// 此循环用于解析loaded的object中的函数，算出其地址，并构建Runtime::Function结构
 	for(std::pair<llvm::object::SymbolRef, U64> symbolSizePair :
 		llvm::object::computeSymbolSizes(*object))
 	{
@@ -584,7 +587,7 @@ Module::Module(const std::vector<U8>& objectBytes,
 		// Add the function to the module's name and address to function maps.
 		WAVM_ASSERT(symbolSizePair.second <= UINTPTR_MAX);
 		Runtime::Function* function
-			= (Runtime::Function*)(loadedAddress - offsetof(Runtime::Function, code));
+			= (Runtime::Function*)(loadedAddress - offsetof(Runtime::Function, code));// offsetof(Runtime::Function, code)==32
 		nameToFunctionMap.addOrFail(std::string(*name), function);
 		addressToFunctionMap.emplace(Uptr(loadedAddress + symbolSizePair.second), function);
 
@@ -647,6 +650,8 @@ Module::~Module()
 	delete memoryManager;
 }
 
+// 在这里我们需要吧操作的链接项揉合到importedSymbolMap中，importedSymbolMap的字符串索引的命名规则是和编译阶段的命名约定好的，
+// 这样才能根据symbol定位地址
 std::shared_ptr<LLVMJIT::Module> LLVMJIT::loadModule(
 	const std::vector<U8>& objectFileBytes,
 	HashMap<std::string, FunctionBinding>&& wavmIntrinsicsExportMap,

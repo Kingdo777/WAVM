@@ -358,6 +358,22 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 	std::vector<Runtime::Function*> jitFunctionDefs;
 	jitFunctionDefs.resize(module->ir.functions.defs.size(), nullptr);
     // LLVMJIT::loadModule用已编译的函数填充在functionDefMutableDatas的函数指针中,并将这些功能添加到模块中。
+	// 我仔细的研究了这部分的内容2天，但是还是没有完全的搞清楚，现在大体的理解如下：
+	// 首先，关于编译，编译形成的对象文件，是将WASM的函数编译为了目标文件
+	// 但是这个目标文件还需要进行链接的操作，链接的内容包括导入的函数、自定义以及导入的Mem、table等
+	// 所谓链接就是将symbol和其地址联系起来，目标文件中调用了函数，操作了mem,只有symbol，没有具体的地址
+	// LLVMJIT::loadModule操作中，会给加载Function的obj代码，同时将所有symbol的地址写入（通过他的一系列参数），从而让Function可以真正的执行
+	// Function的obj代码加载到内存后，会在函数起始执行之前预留一定的空间，用于存放Runtime：：Function的结构，同时将functionDefMutableDatas的地址写入
+	// 然后初始化functionDefMutableData，通过functionDefMutableData获取了通过obj加载的Function结构，Function.code同时就是函数的实际地址
+	// 所以经过loadModule操作之后，我们完成了两件是事：
+	// 1、将obj中的内容装在到了内存（这部分内容是编译过的当前WASM定义的函数），并完成了对链接操作（也就是将obj中的symbol给出所有的地址，
+	//    包括导入的函数和自定义以及导入的Mem、table等），然后构建了jitModule，jitModule的核心字段是nameToFunctionMap和addressToFunctionMap
+	//    通过函数名和地址可以定位到对应函数的Runtime：：Function结构
+	// 2、创建了自定义函数的Runtime::Function结构，这个结构要写道Instance中，这样就可以导出了，而且Function.code指向的就是obj中代码，是可以直接执行的
+	// 这样别人导入的时候需要的就是Function.code，从而用这这地址实现链接
+	// 而对于内部函数，其导入的都是本地函数，地址直接从参数jitFunctionImports中拿到
+	// JIT的过程就是需要要完成LD的部分工作
+	// 一切都合理了
 	std::shared_ptr<LLVMJIT::Module> jitModule
 		= LLVMJIT::loadModule(module->objectCode,
 							  std::move(wavmIntrinsicsExportMap),
@@ -406,6 +422,10 @@ Instance* Runtime::instantiateModuleInternal(Compartment* compartment,
 		exportMap.addOrFail(exportIt.name, exportedObject);
 		exports.push_back(exportedObject);
 	}
+
+    //接下来的操作就是生成Instance实例
+	//初始化全局变量、内存段和表段
+
 
 	// Copy the module's data and elem segments into the Instance for later use.
 	DataSegmentVector dataSegments;
