@@ -15,6 +15,9 @@ using namespace WAVM;
 using namespace WAVM::IR;
 using namespace WAVM::Runtime;
 
+
+// 构造一个LLVM的trunks函数，此函数用来调用Runtime的Function
+// 因为Runtime的Function主要是提供一个函数的入口地址即Function.code的位置，想用LLVM调用起来，还需要封装参数返回值等
 void Runtime::invokeFunction(Context* context,
 							 const Function* function,
 							 FunctionType invokeSig,

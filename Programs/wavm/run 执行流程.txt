@@ -1,3 +1,26 @@
+run的核心执行过程总结：
+1、  加载WASm/WAT文件，构建IR:Module,这是WASM的内存形式
+2、  从Cache中拿到编译过的Obj文件，这是实现JIT方式运行的关键;
+    Obj文件中包含了对当前WASM程序所有自定义函数的本地化可运行的编译，但是还需要链接之后才能运行;
+    若Cache中没有，那么就执行Compile操作，构建Obj，并缓存
+3、  IR::Module + ObjFile = Runtime::Module
+4、  构建内部实例，这是及其核心的步骤，主要是封装供自定义WASM调用的接口（及WASi）;
+    构建过程和生成普通WASM实例大同小异
+5、  链接，链接的过程就是解析自己的导入项，从导入的实例中，找到定义的Runtime的对象，然后返回其指针保存
+6、  生成实例，此过程主要作用是生成Runtime定义的各个对象：Function、Global、Memory、Table等
+    除Function外，其他各项都是直接生成自定义的对象、初始化，然后和导入项，一起放到vector中即可
+    Function，则需要生成可执行的二进制码，主要过程就是通过链接，将导入项解析ObjFile，将ObjFile中的Symbol的地址全部解析，完成链接
+    最后配置导出项，以供其他WASM导入
+    对于内部的WASM，他只有函数导入项，即用于实现WASi接口的本地函数，在内部函数中，将其视为导入项，因为Function导入项必须是Obj，刚好本地函数编译之后就是Obj了
+    然后需要我们生成每个本地函数的trunks函数，以WASM自定义函数的方式，生成其Function对象，以供导出，生成Function对象时需要提供函数symbol的指针（如果调用了函数），
+    此指针对于普通的WASM函数，就是Function.code，也就是函数对应的Obj的地址，这一步是在生成被调用函数的Function对象时确定的，如果是调用本地函数（仅存在与Trunks函数中），
+    那么函数地址就是本地函数的指针
+7、  执行，执行其实不复杂，就是利用llvm生成一个trunks，调用入口函数就行了
+    trunks的参数和返回值根据函数签名准备好，trunks的函数的地址就是入口函数的Function.code
+
+
+
+
 run：
 	parseCommandLineAndEnvironment()
 	····根据命令行的参数给State的字段赋值

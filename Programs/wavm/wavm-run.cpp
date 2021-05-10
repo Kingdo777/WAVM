@@ -710,7 +710,11 @@ struct State
 
 		return true;
 	}
-
+    // 执行的流程并没做什么复杂的工作，主要是：
+	// 1、找到入口函数，检查参数
+	// 2、提供入口函数的Runtime::Function，封装到一个LLVM的Trunks函数里面，开始执行
+	// 3、处理返回值
+	// 从这里可以看到，最重要的步骤其实是实例化的过程中，生成
 	I32 execute(const IR::Module& irModule, Instance* instance)
 	{
 		// Create a WASM execution context.
