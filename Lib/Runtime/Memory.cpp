@@ -131,7 +131,7 @@ Memory* Runtime::createMemory(Compartment* compartment,
 	return memory;
 }
 
-Memory* Runtime::cloneMemory(Memory* memory, Compartment* newCompartment)
+Memory* Runtime::cloneMemory(Memory* memory, Compartment* newCompartment, bool copyContents)
 {
 	Platform::RWMutex::ExclusiveLock resizingLock(memory->resizingMutex);
 	const Uptr numPages = memory->numPages.load(std::memory_order_acquire);
@@ -141,8 +141,9 @@ Memory* Runtime::cloneMemory(Memory* memory, Compartment* newCompartment)
 	if(!newMemory) { return nullptr; }
 
 	// Copy the memory contents to the new memory.
-	memcpy(newMemory->baseAddress, memory->baseAddress, numPages * IR::numBytesPerPage);
-
+    if(copyContents){
+		memcpy(newMemory->baseAddress, memory->baseAddress, numPages * IR::numBytesPerPage);
+	}
 	resizingLock.unlock();
 
 	// Insert the memory in the new compartment's memories array with the same index as it had in

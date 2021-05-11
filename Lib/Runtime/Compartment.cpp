@@ -64,7 +64,7 @@ Compartment* Runtime::createCompartment(std::string&& debugName)
 	return new Compartment(std::move(debugName));
 }
 
-Compartment* Runtime::cloneCompartment(const Compartment* compartment, std::string&& debugName)
+Compartment* Runtime::cloneCompartment(const Compartment* compartment, std::string&& debugName, bool copyMemoryContents)
 {
 	Timing::Timer timer;
 
