@@ -48,8 +48,63 @@ DEFINE_GCOBJECT_TYPE(ObjectKind::global, Global, Global);
 DEFINE_GCOBJECT_TYPE(ObjectKind::exceptionType, ExceptionType, ExceptionType);
 DEFINE_GCOBJECT_TYPE(ObjectKind::instance, Instance, Instance);
 DEFINE_GCOBJECT_TYPE(ObjectKind::context, Context, Context);
-DEFINE_GCOBJECT_TYPE(ObjectKind::compartment, Compartment, Compartment);
+//DEFINE_GCOBJECT_TYPE(ObjectKind::compartment, Compartment, Compartment);
 DEFINE_GCOBJECT_TYPE(ObjectKind::foreign, Foreign, Foreign);
+
+Runtime::Compartment* Runtime::asCompartment(Object* object)
+{
+    if(!(!object || object->kind == ObjectKind::compartment))
+    {
+        for(static const WAVM::Platform::AssertMetadata wavmAssertMetadata{
+            "!object || object->kind == ObjectKind::compartment", "_file_name_", 51};
+            ;)
+        {
+            WAVM::Platform::handleAssertionFailure(wavmAssertMetadata);
+            __asm__ __volatile__("int3");
+            break;
+        }
+    };
+    return (Runtime::Compartment*)object;
+}
+Runtime::Compartment* Runtime::asCompartmentNullable(Object* object)
+{
+    return object && object->kind == ObjectKind::compartment ? (Runtime::Compartment*)object
+                                                             : nullptr;
+}
+const Runtime::Compartment* Runtime::asCompartment(const Object* object)
+{
+    if(!(!object || object->kind == ObjectKind::compartment))
+    {
+        for(static const WAVM::Platform::AssertMetadata wavmAssertMetadata{
+            "!object || object->kind == ObjectKind::compartment", "_file_name_", 51};
+            ;)
+        {
+            WAVM::Platform::handleAssertionFailure(wavmAssertMetadata);
+            __asm__ __volatile__("int3");
+            break;
+        }
+    };
+    return (const Runtime::Compartment*)object;
+}
+const Runtime::Compartment* Runtime::asCompartmentNullable(const Object* object)
+{
+    return object && object->kind == ObjectKind::compartment ? (const Runtime::Compartment*)object
+                                                             : nullptr;
+}
+Object* Runtime::asObject(Runtime::Compartment* object) { return (Object*)object; }
+const Object* Runtime::asObject(const Runtime::Compartment* object)
+{
+    return (const Object*)object;
+}
+void Runtime::setUserData(Runtime::Compartment* object, void* userData, void (*finalizer)(void*))
+{
+    object->userData = userData;
+    object->finalizeUserData = finalizer;
+}
+void* Runtime::getUserData(const Runtime::Compartment* object) { return object->userData; }
+const std::string& Runtime::getDebugName(const Compartment* object) { return object->debugName; }
+
+
 
 DEFINE_OBJECT_TYPE(ObjectKind::function, Function, Function);
 void Runtime::setUserData(Runtime::Function* function, void* userData, void (*finalizer)(void*))

@@ -232,7 +232,8 @@ std::shared_ptr<Process> WASI::createProcess(Runtime::Compartment* compartment,
     // 创建内部的WASM-Module 用作外部函数
 	Instance* wasi_snapshot_preview1
 		= Intrinsics::instantiateModule(compartment,
-										{getIntrinsicModule_wasi(),
+										{// WAVM_INTRINSIC_MODULE_REF(wasi),
+										 getIntrinsicModule_wasi(),
 										 WAVM_INTRINSIC_MODULE_REF(wasiArgsEnvs),
 										 WAVM_INTRINSIC_MODULE_REF(wasiClocks),
 										 WAVM_INTRINSIC_MODULE_REF(wasiFile)},

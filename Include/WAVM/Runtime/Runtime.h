@@ -74,8 +74,31 @@ namespace WAVM { namespace Runtime {
 	WAVM_DECLARE_OBJECT_TYPE(ObjectKind::exceptionType, ExceptionType, ExceptionType);
 	WAVM_DECLARE_OBJECT_TYPE(ObjectKind::instance, Instance, Instance);
 	WAVM_DECLARE_OBJECT_TYPE(ObjectKind::context, Context, Context);
-	WAVM_DECLARE_OBJECT_TYPE(ObjectKind::compartment, Compartment, Compartment);
+//	WAVM_DECLARE_OBJECT_TYPE(ObjectKind::compartment, Compartment, Compartment);
 	WAVM_DECLARE_OBJECT_TYPE(ObjectKind::foreign, Foreign, Foreign);
+
+	struct Compartment;
+	void addGCRoot(const Compartment* type);
+	void removeGCRoot(const Compartment* type) noexcept;
+	Runtime::Compartment* asCompartment(Object* object);
+	Runtime::Compartment* asCompartmentNullable(Object* object);
+	const Runtime::Compartment* asCompartment(const Object* object);
+	const Runtime::Compartment* asCompartmentNullable(const Object* object);
+	Object* asObject(Compartment* object);
+	const Object* asObject(const Runtime::Compartment* object);
+	void setUserData(Runtime::Compartment* object,
+					 void* userData,
+					 void (*finalizer)(void*) = nullptr);
+	void* getUserData(const Runtime::Compartment* object);
+	template<> inline Runtime::Compartment* as<Compartment>(Object* object)
+	{
+		return asCompartment(object);
+	}
+	template<> inline const Runtime::Compartment* as<const Compartment>(const Object* object)
+	{
+		return asCompartment(object);
+	}
+	const std::string& getDebugName(const Compartment*);
 
 	// The result of growing a table or memory.
 	enum class GrowResult

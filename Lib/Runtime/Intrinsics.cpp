@@ -123,7 +123,7 @@ Instance* Intrinsics::instantiateModule(
 			// 来本地函数的存放指针,但是为什么没用同时放到export呢?不放到export怎么被其他人引用呢
 			for(const auto& pair : moduleRef->impl->functionMap)
 			{
-				functionImportBindings.push_back({pair.value->getNativeFunction()});
+				functionImportBindings.emplace_back(pair.value->getNativeFunction());
 				const Uptr typeIndex = irModule.types.size();
 				const Uptr functionIndex = irModule.functions.size();
 				irModule.types.push_back(pair.value->getType());

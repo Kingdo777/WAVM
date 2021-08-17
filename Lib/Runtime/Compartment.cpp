@@ -81,7 +81,7 @@ Compartment* Runtime::cloneCompartment(const Compartment* compartment, std::stri
 	// Clone memories.
 	for(Memory* memory : compartment->memories)
 	{
-		Memory* newMemory = cloneMemory(memory, newCompartment);
+		Memory* newMemory = cloneMemory(memory, newCompartment, copyMemoryContents);
 		WAVM_ASSERT(newMemory->id == memory->id);
 	}
 

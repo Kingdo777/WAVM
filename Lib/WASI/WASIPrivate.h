@@ -140,7 +140,8 @@ namespace WAVM { namespace WASI {
 									   const char* format,
 									   ...);
 
-	WAVM_DECLARE_INTRINSIC_MODULE(wasi);
+//	WAVM_DECLARE_INTRINSIC_MODULE(wasi);
+	extern WAVM::Intrinsics::Module* getIntrinsicModule_wasi();
 	WAVM_DECLARE_INTRINSIC_MODULE(wasiArgsEnvs);
 	WAVM_DECLARE_INTRINSIC_MODULE(wasiClocks);
 	WAVM_DECLARE_INTRINSIC_MODULE(wasiFile);

@@ -36,7 +36,9 @@ IMPLEMENT_GCOBJECT_REFCOUNTING(Global)
 IMPLEMENT_GCOBJECT_REFCOUNTING(ExceptionType)
 IMPLEMENT_GCOBJECT_REFCOUNTING(Instance)
 IMPLEMENT_GCOBJECT_REFCOUNTING(Context)
-IMPLEMENT_GCOBJECT_REFCOUNTING(Compartment)
+//IMPLEMENT_GCOBJECT_REFCOUNTING(Compartment)
+void Runtime::addGCRoot(const Compartment* object) { ++object->numRootReferences; }
+void Runtime::removeGCRoot(const Compartment* object) noexcept { --object->numRootReferences; }
 IMPLEMENT_GCOBJECT_REFCOUNTING(Foreign)
 
 void Runtime::addGCRoot(const Function* function)

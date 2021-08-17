@@ -250,7 +250,7 @@ struct State
 	ABI abi = ABI::detect;
 	// wasm文件是否是预编译的
 	bool precompiled = false;
-	//是否允许开启AVM object cache
+	//是否允许开启WAVM object cache
 	bool allowCaching = true;
 	// 追踪Syscall
 	WASI::SyscallTraceLevel wasiTraceLavel = WASI::SyscallTraceLevel::none;
@@ -918,6 +918,9 @@ struct State
 		Instance* instance = instantiateModule(
 			compartment, module, std::move(linkResult.resolvedImports), filename);
 		if(!instance) { return EXIT_FAILURE; }
+
+
+		Runtime::cloneCompartment(compartment, "", true);
 
 		// Take the module's memory as the WASI process memory.
 		// 将模块的内存用作WASI进程内存。

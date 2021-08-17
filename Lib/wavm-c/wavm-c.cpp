@@ -636,7 +636,34 @@ const wasm_memorytype_t* wasm_externtype_as_memorytype_const(const wasm_externty
 		return ref;                                                                                \
 	}
 
-IMPLEMENT_REF_BASE(ref, Object)
+//IMPLEMENT_REF_BASE(ref, Object)
+void wasm_ref_delete(wasm_ref_t* ref) { removeGCRoot(ref); }
+wasm_ref_t* wasm_ref_copy(const wasm_ref_t* constRef)
+{
+	wasm_ref_t* ref = const_cast<wasm_ref_t*>(constRef);
+	addGCRoot(ref);
+	return ref;
+}
+bool wasm_ref_same(const wasm_ref_t* a, const wasm_ref_t* b) { return a == b; }
+void* wasm_ref_get_host_info(const wasm_ref_t* ref) { return getUserData(ref); }
+void wasm_ref_set_host_info(wasm_ref_t* ref, void* userData)
+{
+	setUserData(ref, userData, nullptr);
+}
+void wasm_ref_set_host_info_with_finalizer(wasm_ref_t* ref,
+										   void* userData,
+										   void (*finalizeUserData)(void*))
+{
+	setUserData(ref, userData, finalizeUserData);
+}
+wasm_ref_t* wasm_ref_remap_to_cloned_compartment(const wasm_ref_t* ref,
+												 const wasm_compartment_t* compartment)
+{
+	wasm_ref_t* remappedRef = remapToClonedCompartment(ref, compartment);
+	addGCRoot(remappedRef);
+	return remappedRef;
+}
+const char* wasm_ref_name(const wasm_ref_t* ref) { return getDebugName(ref).c_str(); }
 
 // wasm_trap_t
 
